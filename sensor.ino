@@ -1,44 +1,49 @@
-// new-sensor.ino (Main project file)
-
-#include "Config.h"
 #include "Sensor.h"
-#include "WiFiManager.h"
-#include "OTAUpdater.h"
-#include "WebConfig.h"
-#include "MQTTClient.h"
+#include "Config.h"
 
-Config config;
-Sensor sensor;
-WiFiManager wifiManager;
-OTAUpdater otaUpdater;
-WebConfig webConfig;
-MQTTClient mqttClient;
+extern Config config;
 
-void setup() {
-  Serial.begin(115200);
-  
-  config.load();
-  wifiManager.setup();
-  sensor.setup();
-  otaUpdater.setup();
-  webConfig.setup();
-  mqttClient.setup();
+
+
+void Sensor::setup() {
+  Wire.begin();
+
+   Wire.begin();
+  if (! sensor.begin(0x29, &Wire)) {
+    Serial.print(F("Error on init of VL sensor: "));
+    Serial.println(sensor.vl_status);
+    while (1)       delay(10);
+  }
+  Serial.println(F("VL53L1X sensor OK!"));
+
+  Serial.print(F("Sensor ID: 0x"));
+  Serial.println(sensor.sensorID(), HEX);
+
+  if (! sensor.startRanging()) {
+    Serial.print(F("Couldn't start ranging: "));
+    Serial.println(sensor.vl_status);
+    while (1)       delay(10);
+  }
+  Serial.println(F("VL53L1X sensor initialized successfully"));
 }
 
-void loop() {
-  wifiManager.handle();
-  webConfig.handle();
-  
-  if (wifiManager.isConnected()) {
-    if (!mqttClient.isConnected()) {
-      mqttClient.reconnect();
-    }
-    mqttClient.handle();
-    
-    sensor.read();
-    mqttClient.publish(sensor.getData());
+bool Sensor::read() {
+  if (sensor.dataReady()) {
+    distance = sensor.distance();
+    //Serial.printf("Sensor measurement: %u\n", distance);
+    sensor.clearInterrupt();
+    return true;
   }
-  
-  // Implement watchdog timer reset
-  ESP.wdtFeed();
+  return false;
+}
+
+String Sensor::getData() {
+  if (distance < 0) {
+    return String(config.sensorName) + "|Error: No distance data available";
+  }
+  return String(config.sensorName) + "|Distance: " + String(distance);
+}
+
+int Sensor::getDistance() const {
+  return distance;
 }

@@ -1,5 +1,3 @@
-// Sensor.h
-
 #ifndef SENSOR_H
 #define SENSOR_H
 
@@ -7,15 +5,21 @@
 #include <Wire.h>
 #include "Adafruit_VL53L1X.h"
 
+#define IRQ_PIN 2
+#define XSHUT_PIN 3
+
+Adafruit_VL53L1X sensor = Adafruit_VL53L1X(XSHUT_PIN, IRQ_PIN);
+
 class Sensor {
 public:
   void setup();
-  void read();
+  bool read();
   String getData();
+  int getDistance() const;
 
 private:
-  Adafruit_VL53L1X vl53;
-  int distance = -1; // Initialize to -1 to indicate no distance read yet
+  
+  int distance = -1;
 };
 
 #endif

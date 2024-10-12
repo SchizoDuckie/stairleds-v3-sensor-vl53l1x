@@ -15,7 +15,7 @@ The Stairled Sensor is an ESP8266-based device that uses a VL53L1X Time-of-Fligh
 ### 3.1 WiFi Connectivity
 - Scan for available "stairled-*" networks
 - Connect to configured "stairled-*" network
-- Create its own AP with a unique name (e.g., "stairled-sensor-<uniqid>") if no configured network is found
+- Create its own AP with 10.0.0.1 ip address with a unique name (e.g., "stairled-sensor-<uniqid>") if no configured network is found
 - Periodically check for previously configured network when in AP mode
 
 ### 3.2 Sensor Operation
@@ -26,6 +26,9 @@ The Stairled Sensor is an ESP8266-based device that uses a VL53L1X Time-of-Fligh
 - Provide a modern, user-friendly captive portal for initial setup and reconfiguration
 - Store configuration in non-volatile memory (e.g., EEPROM or SPIFFS)
 - Offer API endpoint for remote WiFi parameter updates
+- Store Web assets in LittleFS filesystem. 
+  Use arduino-littlefs-upload-1.2.0.vsix for Arduino IDE to sync data:
+  https://github.com/earlephilhower/arduino-littlefs-upload/releases/tag/1.2.0
 
 ### 3.4 MQTT Communication
 - Connect to configured MQTT broker
@@ -83,43 +86,12 @@ The Stairled Sensor is an ESP8266-based device that uses a VL53L1X Time-of-Fligh
 1. Compile the firmware in Arduino IDE
 2. Export the compiled binary: `Sketch` > `Export Compiled Binary`
 3. Upload the `.bin` file to a GitHub release
-
-### 9.2 Implementing OTA Updates in ESP8266
-
-1. Include necessary libraries:
-   ```cpp
-   #include <ESP8266HTTPClient.h>
-   #include <ESP8266httpUpdate.h>
-   ```
-
-2. Add update function:
-   ```cpp
-   void performUpdate(String update_url) {
-     WiFiClientSecure client;
-     client.setInsecure();
-     t_httpUpdate_return ret = ESPhttpUpdate.update(client, update_url);
-     
-     switch (ret) {
-       case HTTP_UPDATE_FAILED:
-         Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
-         break;
-       case HTTP_UPDATE_NO_UPDATES:
-         Serial.println("HTTP_UPDATE_NO_UPDATES");
-         break;
-       case HTTP_UPDATE_OK:
-         Serial.println("HTTP_UPDATE_OK");
-         break;
-     }
-   }
-   ```
-
-3. Trigger update via API endpoint or captive portal interface
+4. Trigger update via API endpoint or captive portal interface
 
 ### 9.3 Update Process
 
-1. User provides GitHub release URL for the new firmware
-2. Sensor downloads the firmware from the provided URL
-3. Sensor verifies the download and applies the update
+1. User provides upload blob in fileupload on sensor interface
+3. Sensor verifies the upload and applies the update
 4. Sensor reboots with new firmware
 
 ## 10. Documentation Needs

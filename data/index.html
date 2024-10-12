@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stairled Sensor Configuration</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Stairled Sensor Configuration</h1>
+        
+        <div class="sensor-graph">
+            <h2>Sensor Readings</h2>
+            <canvas id="sensorChart" width="600" height="400"></canvas>
+        </div>
+
+        <div class="wifi-list">
+            <h2>WiFi Configuration</h2>
+            <button id="scanWifiButton">Scan WiFi Networks</button>
+            <div id="wifiNetworks" class="wifi-networks"></div>
+        </div>
+
+        <form id="configForm" action="/api/config">
+            <h2>Sensor Configuration</h2>
+            <input type="text" name="sensor_name" id="sensor_name" placeholder="Sensor Name">
+            <input type="text" name="mqtt_server" id="mqtt_server" placeholder="MQTT Server">
+            <input type="number" name="mqtt_port" id="mqtt_port" placeholder="MQTT Port">
+            <input type="text" name="mqtt_topic" id="mqtt_topic" placeholder="MQTT Topic">
+            <input type="submit" value="Save Configuration">
+        </form>
+
+        <form id="otaForm" action="/api/ota" enctype="multipart/form-data">
+            <h2>Firmware Update</h2>
+            <input type="file" name="firmware" accept=".bin">
+            <input type="submit" value="Update Firmware">
+        </form>
+    </div>
+    <script src="chart.js"></script>
+    <script src="wifi.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+    color: #333;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+h1, h2 {
+    text-align: center;
+    color: #4CAF50;
+}
+
+form, .wifi-list, .sensor-graph {
+    background-color: white;
+    padding: 20px;
+    margin: 20px 0;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+input[type='text'], input[type='number'], input[type='file'], select {
+    width: 100%;
+    padding: 10px;
+    margin: 10px 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+button, input[type='submit'] {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    margin: 10px 0;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+}
+
+button:hover, input[type='submit']:hover {
+    background-color: #45a049;
+}
+
+#sensorChart {
+    width: 100%;
+    height: 400px;
+    border: 1px solid #ddd;
+}
+
+.wifi-networks {
+    display: flex;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.wifi-network {
+    background-color: #97a79c;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.1s;
+    width: 100%;
+    display: flex;
+    margin: 5px;
+}
+
+.wifi-network:hover {
+    background-color: #4CAF50;
+}
+
+.wifi-network.selected {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.wifi-network.selected:hover {
+    background-color: #45a049;
+}
+
+.wifi-network:active {
+    transform: scale(0.95);
+}

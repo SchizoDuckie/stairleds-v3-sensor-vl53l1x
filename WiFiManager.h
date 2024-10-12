@@ -1,22 +1,37 @@
-// WiFiManager.h
-
 #ifndef WIFI_MANAGER_H
 #define WIFI_MANAGER_H
 
 #include <ESP8266WiFi.h>
-#include <DNSServer.h>
+#include <ESP8266mDNS.h>
+#include <vector>
+
+struct WiFiNetwork {
+  String ssid;
+  int32_t rssi;
+};
 
 class WiFiManager {
 public:
+  WiFiManager(Config& cfg);
   void setup();
   void handle();
-  bool isConnected();
+  bool isConnected() const;
   void startAPMode();
-  void scanNetworks();
+  void stopAPMode();
+  String scanNetworksJson();
+  bool connect(const String& ssid, const String& password);
+  bool isInAPMode() const;
+  IPAddress getAPIP() const;
 
 private:
-  DNSServer dnsServer;
+  Config& config; // Reference to the Config object
+  std::vector<WiFiNetwork> networks;
+  void scanNetworks();
   bool apMode;
+  IPAddress apIP;
+  IPAddress apGateway;
+  IPAddress apSubnet;
+  void setupMDNS();
 };
 
-#endif
+#endif // WIFI_MANAGER_H
