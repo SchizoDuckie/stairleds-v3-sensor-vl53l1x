@@ -36,19 +36,32 @@ void WiFiManager::handle() {
 bool WiFiManager::isConnected() const {
   return WiFi.status() == WL_CONNECTED;
 }
-
 void WiFiManager::startAPMode() {
-  apMode = true;
-  WiFi.mode(WIFI_AP);
-  WiFi.softAPConfig(apIP, apGateway, apSubnet);
-  String apName = "StairledSensor-" + String(ESP.getChipId());
-  WiFi.softAP(apName.c_str());
-  Serial.print(F("Started AP Mode. SSID: "));
-  Serial.println(apName);
-  Serial.print(F("AP IP address: "));
-  Serial.println(WiFi.softAPIP());
-  
-  setupMDNS();
+    apMode = true;
+    WiFi.mode(WIFI_AP);
+    WiFi.softAPConfig(apIP, apGateway, apSubnet);
+    
+    // Use the sensor name in the AP name
+    String apName = "stairled-sensor-";
+    if (strlen(config.sensorName) > 0) {
+        apName += config.sensorName;
+    } else {
+        apName += String(ESP.getChipId(), HEX); // Fallback to chip ID if no name set
+    }
+    
+    // Ensure the AP name is not too long (max 32 characters for ESP8266)
+    if (apName.length() > 32) {
+        apName = apName.substring(0, 32);
+    }
+    
+    WiFi.softAP(apName.c_str());
+    
+    Serial.print(F("Started AP Mode. SSID: "));
+    Serial.println(apName);
+    Serial.print(F("AP IP address: "));
+    Serial.println(WiFi.softAPIP());
+    
+    setupMDNS();
 }
 
 void WiFiManager::stopAPMode() {
@@ -61,13 +74,30 @@ void WiFiManager::stopAPMode() {
 }
 
 void WiFiManager::setupMDNS() {
-  if (MDNS.begin("sensor")) {
-    MDNS.addService("http", "tcp", 80);
-    Serial.println(F("mDNS responder started"));
-    Serial.println(F("You can now connect to http://sensor.local"));
-  } else {
-    Serial.println(F("Error setting up mDNS responder!"));
-  }
+    // Create a unique mDNS name using the sensor name or chip ID
+    String mdnsName = "stairled-sensor-";
+    if (strlen(config.sensorName) > 0) {
+        mdnsName += config.sensorName;
+    } else {
+        mdnsName += String(ESP.getChipId(), HEX);
+    }
+    
+    // Ensure the mDNS name is not too long (max 63 characters)
+    if (mdnsName.length() > 63) {
+        mdnsName = mdnsName.substring(0, 63);
+    }
+    
+    // Replace any spaces with hyphens for a valid mDNS name
+    mdnsName.replace(" ", "-");
+    
+    if (MDNS.begin(mdnsName.c_str())) {
+        MDNS.addService("http", "tcp", 80);
+        Serial.print(F("mDNS responder started: http://"));
+        Serial.print(mdnsName);
+        Serial.println(F(".local"));
+    } else {
+        Serial.println(F("Error setting up mDNS responder!"));
+    }
 }
 
 // Set a reasonable size for the JsonDocument to avoid dynamic memory allocation issues
@@ -124,6 +154,14 @@ bool WiFiManager::connect(const String& ssid, const String& password) {
     Serial.println(F("\nFailed to connect to WiFi. Password incorrect?"));
     return false;
   }
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println(F("\nConnected to WiFi"));
+        setupMDNS();  // Set up mDNS after successful connection
+        return true;
+    } else {
+        Serial.println(F("\nFailed to connect to WiFi"));
+        return false;
+    }
 }
 
 void WiFiManager::scanNetworks() {

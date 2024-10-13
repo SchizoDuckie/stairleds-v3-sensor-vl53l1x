@@ -11,6 +11,7 @@ const char* const WIFI_CONNECT_ENDPOINT = "/api/wifi-connect";
 const char* const CONFIG_ENDPOINT = "/api/config";
 const char* const SENSOR_DATA_ENDPOINT = "/api/sensor-data";
 const char* const SENSOR_STATUS_ENDPOINT = "/api/sensor-status";
+const char* const MDNS_CLIENTS_ENDPOINT = "/api/mdns-clients";
 const char* const OTA_ENDPOINT = "/api/ota";
 const char* const ROOT_URI = "/";
 const char* const CAPTIVE_PORTAL_REDIRECT = "http://";
@@ -48,6 +49,7 @@ void WebServer::setupRoutes() {
     
     server.serveStatic("/", LittleFS, "/");
     server.on(SENSOR_STATUS_ENDPOINT, HTTP_GET, std::bind(&WebServer::handleSensorStatus, this));
+    server.on(MDNS_CLIENTS_ENDPOINT, HTTP_GET, std::bind(&WebServer::handleMDNSClients, this));
     
     server.onNotFound(std::bind(&WebServer::handleNotFound, this));
 
@@ -260,6 +262,50 @@ bool WebServer::isIp(const String& str) {
         }
     }
     return true;
+}
+
+void WebServer::handleMDNSClients() {
+    if (WiFi.status() != WL_CONNECTED) {
+        // Device is not connected to WiFi
+        DynamicJsonDocument errorDoc(256);
+        errorDoc["error"] = "Not connected to WiFi";
+        errorDoc["isAPMode"] = wifiManager.isInAPMode();
+        errorDoc["connected"] = false;
+
+        String errorResponse;
+        serializeJson(errorDoc, errorResponse);
+        server.send(400, HTTP_APPLICATION_JSON, errorResponse);
+        return;
+    }
+
+    // Start mDNS to query services
+    if (!MDNS.begin(config.sensorName)) {
+        DynamicJsonDocument errorDoc(256);
+        errorDoc["error"] = "Failed to start mDNS";
+
+        String errorResponse;
+        serializeJson(errorDoc, errorResponse);
+        server.send(500, HTTP_APPLICATION_JSON, errorResponse);
+        return;
+    }
+
+    int n = MDNS.queryService("http", "tcp");  // Query HTTP services on the network
+    DynamicJsonDocument responseDoc(1024);
+    JsonArray clientsArray = responseDoc.createNestedArray("clients");
+
+    for (int i = 0; i < n; ++i) {
+        JsonObject client = clientsArray.createNestedObject();
+        client["hostname"] = MDNS.hostname(i);
+        client["ip"] = MDNS.IP(i).toString();
+        client["port"] = MDNS.port(i);
+    }
+
+    MDNS.end();  // Stop mDNS
+
+    // Serialize response and send it
+    String jsonResponse;
+    serializeJson(responseDoc, jsonResponse);
+    server.send(200, HTTP_APPLICATION_JSON, jsonResponse);
 }
 
 String WebServer::toStringIP(const IPAddress& ip) {
