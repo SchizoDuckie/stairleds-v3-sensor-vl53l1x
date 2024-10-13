@@ -9,6 +9,7 @@ const char* const HTTP_APPLICATION_JSON = "application/json";
 const char* const WIFI_SCAN_ENDPOINT = "/api/wifi-scan";
 const char* const WIFI_CONNECT_ENDPOINT = "/api/wifi-connect";
 const char* const CONFIG_ENDPOINT = "/api/config";
+const char* const SENSOR_DATA_ENDPOINT = "/api/sensor-data";
 const char* const SENSOR_STATUS_ENDPOINT = "/api/sensor-status";
 const char* const OTA_ENDPOINT = "/api/ota";
 const char* const ROOT_URI = "/";
@@ -44,7 +45,6 @@ void WebServer::setupRoutes() {
     }, std::bind(&WebServer::handleOTAUpload, this));
     server.on(WIFI_SCAN_ENDPOINT, HTTP_GET, std::bind(&WebServer::handleWiFiScan, this));
     server.on(WIFI_CONNECT_ENDPOINT, HTTP_POST, std::bind(&WebServer::handleWiFiConnect, this));
-    server.on("/api/sensor-data", HTTP_GET, std::bind(&WebServer::handleSensorData, this));
     
     server.serveStatic("/", LittleFS, "/");
     server.on(SENSOR_STATUS_ENDPOINT, HTTP_GET, std::bind(&WebServer::handleSensorStatus, this));
