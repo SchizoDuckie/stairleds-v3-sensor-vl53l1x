@@ -123,37 +123,29 @@ String WiFiManager::scanNetworksJson() {
 }
 
 bool WiFiManager::connect(const String& ssid, const String& password) {
+    if (ssid.length() == 0) {
+        Serial.println(F("WifiManager.connect was passed an empty ssid"));
+        return false;
+    }
 
-  if (ssid.length() == 0) {
-    Serial.print(F("WifiManager.connect was passed an empty ssid, wtf"));
-    return false;
-  }
+    if (apMode) {
+        Serial.println(F("Stopping AP mode"));
+        stopAPMode();
+    }
 
-  if (apMode) {
-    Serial.print(F("Stopping AP mode: "));
-    stopAPMode();
-  }
+    Serial.print(F("Attempting to connect to: "));
+    Serial.println(ssid);
+    Serial.print(F("Password: "));
+    Serial.println(password);
+    WiFi.begin(ssid.c_str(), password.c_str());
 
-  Serial.print(F("Attempting to connect to: "));
-  Serial.println(ssid.c_str());
-  Serial.print(F(" password: "));
-  Serial.println(password.c_str());
-  WiFi.begin(ssid.c_str(), password.c_str());
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+        delay(500);
+        Serial.print(".");
+        attempts++;
+    }
 
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-    delay(500);
-    Serial.print(".");
-    attempts++;
-  }
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println(F("\nConnected to WiFi"));
-    return true;
-  } else {
-    Serial.println(F("\nFailed to connect to WiFi. Password incorrect?"));
-    return false;
-  }
     if (WiFi.status() == WL_CONNECTED) {
         Serial.println(F("\nConnected to WiFi"));
         setupMDNS();  // Set up mDNS after successful connection
