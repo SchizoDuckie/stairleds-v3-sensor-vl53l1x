@@ -21,14 +21,14 @@ void setup() {
   wifiManager.setup();
   otaUpdater.setup();
   webServer.begin();
-  mqttClient.setup();
+  //mqttClient.setup();
 }
 
 void loop() {
   wifiManager.handle();
   webServer.handle();
   otaUpdater.handle();
-  mqttClient.handle();
+  //mqttClient.handle();
 
   static unsigned long lastSensorRead = 0;
   unsigned long currentMillis = millis();
@@ -37,13 +37,12 @@ void loop() {
     if (sensorManager.read()) {
             
       lastSensorRead = currentMillis;
-      Serial.printf("Free heap: %d bytes\n", ESP.getFreeHeap());
-
+      //Serial.printf("Free heap: %d bytes\n", ESP.getFreeHeap());
 
       if (wifiManager.isConnected() && mqttClient.isConnected()) {
         static unsigned long lastMqttPublish = 0;
         if (currentMillis - lastMqttPublish >= 5000) { // Publish to MQTT every 5 seconds
-          mqttClient.publish(sensorManager.getData());
+          //mqttClient.publish(sensorManager.getData());
           lastMqttPublish = currentMillis;
         }
       }
