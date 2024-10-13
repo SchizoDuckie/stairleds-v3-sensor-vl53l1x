@@ -29,8 +29,8 @@ private:
     void handleWiFiScan();
     void handleWiFiConnect();
     void handleSensorData();
+    void handleSensorStatus();
     void handleNotFound();
-    
     void logRequest();
     String processTemplate(const String& templateContent);
     bool captivePortal();

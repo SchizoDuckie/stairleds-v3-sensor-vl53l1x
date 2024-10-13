@@ -9,6 +9,7 @@ const char* const HTTP_APPLICATION_JSON = "application/json";
 const char* const WIFI_SCAN_ENDPOINT = "/api/wifi-scan";
 const char* const WIFI_CONNECT_ENDPOINT = "/api/wifi-connect";
 const char* const CONFIG_ENDPOINT = "/api/config";
+const char* const SENSOR_STATUS_ENDPOINT = "/api/sensor-status";
 const char* const OTA_ENDPOINT = "/api/ota";
 const char* const ROOT_URI = "/";
 const char* const CAPTIVE_PORTAL_REDIRECT = "http://";
@@ -46,6 +47,7 @@ void WebServer::setupRoutes() {
     server.on("/api/sensor-data", HTTP_GET, std::bind(&WebServer::handleSensorData, this));
     
     server.serveStatic("/", LittleFS, "/");
+    server.on(SENSOR_STATUS_ENDPOINT, HTTP_GET, std::bind(&WebServer::handleSensorStatus, this));
     
     server.onNotFound(std::bind(&WebServer::handleNotFound, this));
 
@@ -113,11 +115,53 @@ void WebServer::handleConfigPost() {
 
         // Save config
         config.save();
+}
 
-        server.send(200, HTTP_200_TEXT_PLAIN, CONFIG_UPDATED_MSG);
+void WebServer::handleSensorStatus() {
+    DynamicJsonDocument doc(512);
+    
+    doc["sensorName"] = config.sensorName;  // Add the sensor name
+    
+    if (WiFi.status() == WL_CONNECTED) {
+        doc["connected"] = true;
+        doc["ssid"] = WiFi.SSID();
+        doc["ip"] = WiFi.localIP().toString();
+        doc["isAPMode"] = false;
+
+        // Attempt to discover stairled-server.local
+        if (MDNS.begin("stairled-sensor")) {
+            int n = MDNS.queryService("http", "tcp");
+            bool serverFound = false;
+            for (int i = 0; i < n; ++i) {
+                if (MDNS.hostname(i) == "stairled-server") {
+                    doc["serverDiscovered"] = true;
+                    doc["serverIP"] = MDNS.IP(i).toString();
+                    doc["serverPort"] = MDNS.port(i);
+                    serverFound = true;
+                    break;
+                }
+            }
+            if (!serverFound) {
+                doc["serverDiscovered"] = false;
+            }
+            MDNS.end();
+        } else {
+            doc["serverDiscovered"] = false;
+            doc["mdnsError"] = "Failed to start mDNS";
+        }
+    } else if (wifiManager.isInAPMode()) {
+        doc["connected"] = false;
+        doc["isAPMode"] = true;
+        doc["apName"] = WiFi.softAPSSID();
+        doc["apIP"] = WiFi.softAPIP().toString();
     } else {
-        server.send(400, HTTP_200_TEXT_PLAIN, NO_DATA_RECEIVED_MSG);
+        doc["connected"] = false;
+        doc["isAPMode"] = false;
     }
+
+    String response;
+    serializeJson(doc, response);
+    server.send(200, "application/json", response);
 }
 
 void WebServer::handleRoot() {
