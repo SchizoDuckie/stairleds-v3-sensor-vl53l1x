@@ -48,6 +48,30 @@ void WebServer::setupRoutes() {
     server.serveStatic("/", LittleFS, "/");
     
     server.onNotFound(std::bind(&WebServer::handleNotFound, this));
+
+    server.addHook([this](const String& method, const String& url, WiFiClient* client, ESP8266WebServer::ContentTypeFunction contentType) {
+        (void)method;      // Cast to void to avoid unused variable warnings
+        (void)url;
+        (void)client;
+        (void)contentType;
+        this->logRequest();
+        return ESP8266WebServer::CLIENT_REQUEST_CAN_CONTINUE;
+    });
+void WebServer::logRequest() {
+    String message = server.method() == HTTP_GET ? F("GET") : F("POST");
+    message += F(" ");
+    message += server.uri();
+    
+    if (server.args() > 0) {
+        message += F("\nArguments: ");
+        for (uint8_t i = 0; i < server.args(); i++) {
+            message += F("\n");
+            message += server.argName(i);
+            message += F(": ");
+            message += server.arg(i);
+        }
+    }
+    Serial.println(message);
 }
 
 void WebServer::handle() {

@@ -31,6 +31,7 @@ private:
     void handleSensorData();
     void handleNotFound();
     
+    void logRequest();
     String processTemplate(const String& templateContent);
     bool captivePortal();
     bool isIp(const String& str);
