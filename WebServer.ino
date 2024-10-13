@@ -3,6 +3,7 @@
 
 // Define string constants
 const char* const HTTP_200_TEXT_PLAIN = "text/plain";
+const char* const HTTP_200_TEXT_HTML = "text/html";
 const char* const HTTP_400_TEXT_PLAIN = "400";
 const char* const HTTP_404_TEXT_PLAIN = "404";
 const char* const HTTP_APPLICATION_JSON = "application/json";
@@ -20,6 +21,7 @@ const char* const JSON_INVALID_MSG = "Invalid JSON";
 const char* const CONFIG_UPDATED_MSG = "Configuration updated successfully";
 const char* const CONNECTION_FAILED_MSG = "Connection failed";
 const char* const NO_DATA_RECEIVED_MSG = "No data received";
+const char* const HEADER_LOCATION = "Location";
 
 WebServer::WebServer(Config& config, OTAUpdater& otaUpdater, Sensor& sensor, WiFiManager& wifiManager)
     : server(80), config(config), otaUpdater(otaUpdater), sensor(sensor), wifiManager(wifiManager) {}
@@ -46,10 +48,11 @@ void WebServer::setupRoutes() {
     }, std::bind(&WebServer::handleOTAUpload, this));
     server.on(WIFI_SCAN_ENDPOINT, HTTP_GET, std::bind(&WebServer::handleWiFiScan, this));
     server.on(WIFI_CONNECT_ENDPOINT, HTTP_POST, std::bind(&WebServer::handleWiFiConnect, this));
-    
-    server.serveStatic("/", LittleFS, "/");
+    server.on(SENSOR_DATA_ENDPOINT, HTTP_GET, std::bind(&WebServer::handleSensorData, this));
     server.on(SENSOR_STATUS_ENDPOINT, HTTP_GET, std::bind(&WebServer::handleSensorStatus, this));
     server.on(MDNS_CLIENTS_ENDPOINT, HTTP_GET, std::bind(&WebServer::handleMDNSClients, this));
+
+    server.serveStatic(ROOT_URI, LittleFS, ROOT_URI);
     
     server.onNotFound(std::bind(&WebServer::handleNotFound, this));
 
@@ -61,6 +64,9 @@ void WebServer::setupRoutes() {
         this->logRequest();
         return ESP8266WebServer::CLIENT_REQUEST_CAN_CONTINUE;
     });
+}
+
+
 void WebServer::logRequest() {
     String message = server.method() == HTTP_GET ? F("GET") : F("POST");
     message += F(" ");
@@ -77,6 +83,7 @@ void WebServer::logRequest() {
     }
     Serial.println(message);
 }
+
 
 void WebServer::handle() {
     server.handleClient();
@@ -98,25 +105,42 @@ void WebServer::handleConfigGet() {
     server.send(200, HTTP_APPLICATION_JSON, jsonResponse);
 }
 
+
 void WebServer::handleConfigPost() {
-    if (server.hasArg("plain")) {
-        String jsonBody = server.arg("plain");
-        JsonDocument doc;
-        DeserializationError error = deserializeJson(doc, jsonBody);
+    DynamicJsonDocument doc(512);
+    DeserializationError error = deserializeJson(doc, server.arg("plain"));
 
-        if (error) {
-            server.send(400, HTTP_200_TEXT_PLAIN, JSON_INVALID_MSG);
-            return;
+    if (error) {
+        server.send(400, HTTP_200_TEXT_PLAIN, "Invalid JSON");
+        return;
+    }
+
+    bool needsReboot = false;
+
+    if (doc.containsKey("sensorName")) {
+        String newName = doc["sensorName"].as<String>();
+        if (strcmp(newName.c_str(), config.sensorName) != 0) {
+            strncpy(config.sensorName, newName.c_str(), sizeof(config.sensorName) - 1);
+            needsReboot = true;
         }
+    }
 
-        // Update config object
-        strncpy(config.sensorName, doc["sensorName"] | config.sensorName, sizeof(config.sensorName) - 1);
-        strncpy(config.mqttBroker, doc["mqttBroker"] | config.mqttBroker, sizeof(config.mqttBroker) - 1);
-        strncpy(config.mqttTopic, doc["mqttTopic"] | config.mqttTopic, sizeof(config.mqttTopic) - 1);
-        config.mqttPort = doc["mqttPort"] | config.mqttPort;
+    // Handle other config updates here...
 
-        // Save config
-        config.save();
+    config.save();
+
+    JsonObject response = doc.to<JsonObject>();
+    response["success"] = true;
+    response["needsReboot"] = needsReboot;
+
+    String jsonResponse;
+    serializeJson(response, jsonResponse);
+    server.send(200, HTTP_APPLICATION_JSON, jsonResponse);
+
+    if (needsReboot) {
+        delay(1000); // Give time for the response to be sent
+        ESP.restart();
+    }
 }
 
 void WebServer::handleSensorStatus() {
@@ -170,11 +194,11 @@ void WebServer::handleRoot() {
     if (captivePortal()) { return; }
     File file = LittleFS.open("/index.html", "r");
     if (!file) {
-        server.send(404, "text/plain", "File not found");
+        server.send(404, HTTP_200_TEXT_PLAIN, FILE_NOT_FOUND_MSG);
         return;
     }
 
-    server.streamFile(file, "text/html");
+    server.streamFile(file, HTTP_200_TEXT_HTML);
     file.close();
 }
 
@@ -212,15 +236,19 @@ void WebServer::handleWiFiConnect() {
     if (server.hasArg("ssid") && server.hasArg("password")) {
         String ssid = server.arg("ssid");
         String password = server.arg("password");
-        server.client().stop();
-        server.close();
-        //if (wifiManager.connect(ssid, password)) {
-          strncpy(config.wifiSSID, ssid.c_str(), sizeof(config.wifiSSID) - 1);
-          strncpy(config.wifiPassword, password.c_str(), sizeof(config.wifiPassword) - 1);
-          config.save();
-          Serial.printf("Save Success! Rebooting!: %s : %s! %s \n", ssid.c_str(), password.c_str());
-          ESP.reset();
-      
+        
+        strncpy(config.wifiSSID, ssid.c_str(), sizeof(config.wifiSSID) - 1);
+        strncpy(config.wifiPassword, password.c_str(), sizeof(config.wifiPassword) - 1);
+        config.save();
+        
+        // Send response before resetting
+        server.send(200, HTTP_200_TEXT_PLAIN, "WiFi credentials saved. Device will reset and connect to the new network.");
+        
+        // Delay to ensure the response is sent
+        delay(1000);
+        
+        // Reset the device
+        ESP.restart();
     } else {
         server.send(400, HTTP_200_TEXT_PLAIN, "Missing SSID or password");
     }
@@ -246,7 +274,7 @@ void WebServer::handleNotFound() {
 bool WebServer::captivePortal() {
     if (!isIp(server.hostHeader()) && server.hostHeader() != (String(config.sensorName) + ".local")) {
         Serial.println(F("Request redirected to captive portal"));
-        server.sendHeader("Location", String(CAPTIVE_PORTAL_REDIRECT) + toStringIP(server.client().localIP()), true);
+        server.sendHeader(HEADER_LOCATION, String(CAPTIVE_PORTAL_REDIRECT) + toStringIP(server.client().localIP()), true);
         server.send(302, HTTP_200_TEXT_PLAIN, "");
         server.client().stop();
         return true;
@@ -307,6 +335,7 @@ void WebServer::handleMDNSClients() {
     serializeJson(responseDoc, jsonResponse);
     server.send(200, HTTP_APPLICATION_JSON, jsonResponse);
 }
+
 
 String WebServer::toStringIP(const IPAddress& ip) {
     return String(ip[0]) + "." + String(ip[1]) + "." + String(ip[2]) + "." + String(ip[3]);
