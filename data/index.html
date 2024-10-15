@@ -3,41 +3,128 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stairled Sensor Configuration</title>
+    <title>Stairled Sensor Setup</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
-        <h1>Stairled Sensor Configuration</h1>
-        
-        <div class="sensor-graph">
+        <h1>Stairled Sensor Setup</h1>
+
+        <div class="main-content">
+            <div class="setup-column">
+                <div id="setupSteps" class="section">
+                    <div id="step1" class="setup-step">
+                        <h2>Step 1: Set Sensor Name</h2>
+                        <p class="instructions">
+                            Enter a unique name for your sensor. Choose a descriptive name, like "top-stair" or "bottom-stair".
+                            Use only lowercase letters, numbers, and dashes.
+                        </p>
+                        <div class="form-group">
+                            <label for="sensorName">Sensor Name:</label>
+                            <input type="text" id="sensorName" name="sensorName" required>
+                            <div id="sensorNameFeedback"></div>
+                        </div>
+                        <button id="setSensorName">Set Name</button>
+                    </div>
+
+                    <div id="step2" class="setup-step" hidden>
+                        <h2>Step 2: Connect to WiFi</h2>
+                        <p class="instructions">
+                            Click "Scan for Networks" to find available WiFi networks. Look for and connect to the "stairled-server" network.
+                        </p>
+                        <button id="scanWifi">Scan for Networks</button>
+                    </div>
+
+                    <div id="step3" class="setup-step" hidden>
+                        <h2>Step 3: MQTT Configuration</h2>
+                        <p class="instructions">
+                            MQTT settings are usually pre-configured and don't need to be changed.
+                            Only modify these if you're setting up a custom MQTT broker or have been instructed to do so.
+                        </p>
+                        <button id="toggleMqttConfig">Show/Hide MQTT Settings</button>
+                        <div id="mqttConfig" hidden>
+                            <div class="form-group">
+                                <label for="mqttBroker">MQTT Broker:</label>
+                                <input type="text" id="mqttBroker" name="mqttBroker">
+                            </div>
+                            <div class="form-group">
+                                <label for="mqttPort">MQTT Port:</label>
+                                <input type="number" id="mqttPort" name="mqttPort">
+                            </div>
+                            <div class="form-group">
+                                <label for="mqttTopic">MQTT Topic:</label>
+                                <input type="text" id="mqttTopic" name="mqttTopic">
+                            </div>
+                            <button id="saveMqttConfig">Save MQTT Config</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="status-column">
+                <div id="sensorStatus" class="section" aria-live="polite">
+                    <h2>Sensor Status</h2>
+                    <p id="connectionStatus">Checking connection status...</p>
+                    <div class="status-panel">
+                        <div class="status-item">
+                            <span class="status-icon" id="sensorNameIcon">⚪</span>
+                            <span class="status-text">Sensor name: <span id="sensorNameStatus">Not set</span></span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-icon" id="wifiIcon">⚪</span>
+                            <span class="status-text">WiFi: <span id="wifiStatus">Not connected</span></span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-icon" id="serverIcon">⚪</span>
+                            <span class="status-text">Server: <span id="serverStatus">Not found</span></span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-icon">📡</span>
+                            <span class="status-text">IP Address: <span id="ipAddress">N/A</span></span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-icon">🔗</span>
+                            <span class="status-text">Last SSID: <span id="lastConfiguredSSID">N/A</span></span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-icon">🏷️</span>
+                            <span class="status-text">mDNS Hostname: <span id="mdnsHostname">N/A</span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="sensorGraph" class="section">
             <h2>Sensor Readings</h2>
-            <canvas id="sensorChart" width="600" height="400"></canvas>
+            <canvas id="sensorChart"></canvas>
         </div>
-
-        <div class="wifi-list">
-            <h2>WiFi Configuration</h2>
-            <button id="scanWifiButton">Scan WiFi Networks</button>
-            <div id="wifiNetworks" class="wifi-networks"></div>
-        </div>
-
-        <form id="configForm" action="/api/config">
-            <h2>Sensor Configuration</h2>
-            <input type="text" name="sensor_name" id="sensor_name" placeholder="Sensor Name">
-            <input type="text" name="mqtt_server" id="mqtt_server" placeholder="MQTT Server">
-            <input type="number" name="mqtt_port" id="mqtt_port" placeholder="MQTT Port">
-            <input type="text" name="mqtt_topic" id="mqtt_topic" placeholder="MQTT Topic">
-            <input type="submit" value="Save Configuration">
-        </form>
-
-        <form id="otaForm" action="/api/ota" enctype="multipart/form-data">
-            <h2>Firmware Update</h2>
-            <input type="file" name="firmware" accept=".bin">
-            <input type="submit" value="Update Firmware">
-        </form>
     </div>
+
+    <div id="wifiModal" class="modal" hidden>
+        <div class="modal-content">
+            <h2>Available WiFi Networks</h2>
+            <div id="wifiNetworks"></div>
+            <button id="closeWifiModal">Close</button>
+        </div>
+    </div>
+
+    <div id="connectionModal" class="modal" hidden>
+        <div class="modal-content">
+            <h2>Connecting to WiFi</h2>
+            <p id="connectionStatus">Attempting to connect...</p>
+            <p>Please wait up to 30 seconds. If successful, you'll be prompted to connect to the selected network.</p>
+            <button id="refreshPage" hidden>Refresh Page</button>
+        </div>
+    </div>
+
     <script src="chart.js"></script>
-    <script src="wifi.js"></script>
+    <script src="chartmanager.js"></script>
+    <script src="configmanager.js"></script>
+    <script src="mqttmanager.js"></script>
+    <script src="sensordata.js"></script>
+    <script src="setupmanager.js"></script>
+    <script src="wifimanager.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

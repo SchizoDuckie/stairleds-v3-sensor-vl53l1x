@@ -31,7 +31,7 @@ Chart = (selector, options) => {
     let style = window.getComputedStyle(canvas);
     let em = parseFloat(getComputedStyle(document.documentElement).fontSize);
 
-    let colors = ['orange', 'limegreen', 'steelblue', 'red', 'yellow',];
+    let colors = ['darkgreen', 'limegreen', 'steelblue', 'red', 'yellow',];
     let mx = 3 * em, my = 3 * em, xx = 0, yx = 0;
 
     let ctx = canvas.getContext('2d');
@@ -138,7 +138,7 @@ Chart = (selector, options) => {
         if (data.length === 0) return;
         ctx.save();
         ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 4;
         ctx.beginPath();
         moveTo(data[0][0], data[0][1]);
         data.forEach(el => lineTo(el[0], el[1]));
