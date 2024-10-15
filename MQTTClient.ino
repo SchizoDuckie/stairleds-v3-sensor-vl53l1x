@@ -3,7 +3,7 @@
 MQTTClient::MQTTClient(Config& config) : config(config), client(espClient) {}
 
 void MQTTClient::setup() {
-  client.setServer(config.mqttBroker, config.mqttPort);
+  client.setServer(config.getMqttBroker(), config.getMqttPort());
 }
 
 void MQTTClient::handle() {
@@ -49,5 +49,5 @@ bool MQTTClient::publish(const String& message) {
   if (!client.connected()) {
     return false;
   }
-  return client.publish(config.mqttTopic, message.c_str());
+  return client.publish(config.getMqttTopic(), message.c_str());
 }
