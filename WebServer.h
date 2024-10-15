@@ -7,10 +7,11 @@
 #include "OTAUpdater.h"
 #include "Sensor.h"
 #include "WiFiManager.h"
+#include "MDNSManager.h"
 
 class WebServer {
 public:
-    WebServer(Config& config, OTAUpdater& otaUpdater, Sensor& sensor, WiFiManager& wifiManager);
+    WebServer(Config& config, OTAUpdater& otaUpdater, Sensor& sensor, WiFiManager& wifiManager, MDNSManager& mdnsManager);
     void begin();
     void handle();
 
@@ -20,6 +21,7 @@ private:
     OTAUpdater& otaUpdater;
     Sensor& sensor;
     WiFiManager& wifiManager;
+    MDNSManager& mdnsManager;
 
     void setupRoutes();
     void handleRoot();
@@ -30,6 +32,7 @@ private:
     void handleWiFiConnect();
     void handleSensorData();
     void handleSensorStatus();
+    void handleMDNSClients();
     void handleNotFound();
     void logRequest();
     String processTemplate(const String& templateContent);

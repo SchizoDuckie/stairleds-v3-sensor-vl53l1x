@@ -23,8 +23,8 @@ const char* const CONNECTION_FAILED_MSG = "Connection failed";
 const char* const NO_DATA_RECEIVED_MSG = "No data received";
 const char* const HEADER_LOCATION = "Location";
 
-WebServer::WebServer(Config& config, OTAUpdater& otaUpdater, Sensor& sensor, WiFiManager& wifiManager)
-    : server(80), config(config), otaUpdater(otaUpdater), sensor(sensor), wifiManager(wifiManager) {}
+WebServer::WebServer(Config& config, OTAUpdater& otaUpdater, Sensor& sensor, WiFiManager& wifiManager, MDNSManager& mdnsManager)
+    : server(80), config(config), otaUpdater(otaUpdater), sensor(sensor), wifiManager(wifiManager), mdnsManager(mdnsManager) {}
 
 void WebServer::begin() {
     if (!LittleFS.begin()) {
@@ -95,10 +95,10 @@ void WebServer::handleSensorData() {
 
 void WebServer::handleConfigGet() {
     JsonDocument doc;
-    doc["sensorName"] = config.sensorName;
-    doc["mqttBroker"] = config.mqttBroker;
-    doc["mqttPort"] = config.mqttPort;
-    doc["mqttTopic"] = config.mqttTopic;
+    doc["sensorName"] = config.getSensorName();
+    doc["mqttBroker"] = config.getMqttBroker();
+    doc["mqttPort"] = config.getMqttPort();
+    doc["mqttTopic"] = config.getMqttTopic();
 
     String jsonResponse;
     serializeJson(doc, jsonResponse);
@@ -107,25 +107,77 @@ void WebServer::handleConfigGet() {
 
 
 void WebServer::handleConfigPost() {
-    DynamicJsonDocument doc(512);
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, server.arg("plain"));
 
     if (error) {
-        server.send(400, HTTP_200_TEXT_PLAIN, "Invalid JSON");
+        server.send(400, HTTP_200_TEXT_PLAIN, JSON_INVALID_MSG);
         return;
     }
 
+    if (doc["sensorName"].is<const char*>()) {
+        config.setSensorName(doc["sensorName"]);
+    }
+
+    if (doc["wifiSSID"].is<const char*>() && doc["wifiPassword"].is<const char*>()) {
+        config.setWifiCredentials(doc["wifiSSID"], doc["wifiPassword"]);
+    }
+
+    if (doc["mqttBroker"].is<const char*>()) {
+        config.setMqttBroker(doc["mqttBroker"]);
+    }
+
+    if (doc["mqttPort"].is<uint16_t>()) {
+        config.setMqttPort(doc["mqttPort"]);
+    }
+
+    if (doc["mqttTopic"].is<const char*>()) {
+        config.setMqttTopic(doc["mqttTopic"]);
+    }
+    
     bool needsReboot = false;
 
     if (doc.containsKey("sensorName")) {
         String newName = doc["sensorName"].as<String>();
-        if (strcmp(newName.c_str(), config.sensorName) != 0) {
-            strncpy(config.sensorName, newName.c_str(), sizeof(config.sensorName) - 1);
+        if (strcmp(newName.c_str(), config.getSensorName()) != 0) {
+            config.setSensorName(newName.c_str());
             needsReboot = true;
         }
     }
 
-    // Handle other config updates here...
+    if (doc.containsKey("wifiSSID") && doc.containsKey("wifiPassword")) {
+        const char* newSSID = doc["wifiSSID"];
+        const char* newPassword = doc["wifiPassword"];
+        if (strcmp(newSSID, config.getWifiSSID()) != 0 || 
+            strcmp(newPassword, config.getWifiPassword()) != 0) {
+            config.setWifiCredentials(newSSID, newPassword);
+            needsReboot = true;
+        }
+    }
+
+    if (doc.containsKey("mqttBroker")) {
+        const char* newBroker = doc["mqttBroker"];
+        if (strcmp(newBroker, config.getMqttBroker()) != 0) {
+            config.setMqttBroker(newBroker);
+            needsReboot = true;
+        }
+    }
+
+    if (doc.containsKey("mqttPort")) {
+        uint16_t newPort = doc["mqttPort"];
+        if (newPort != config.getMqttPort()) {
+            config.setMqttPort(newPort);
+            needsReboot = true;
+        }
+    }
+
+    if (doc.containsKey("mqttTopic")) {
+        const char* newTopic = doc["mqttTopic"];
+        if (strcmp(newTopic, config.getMqttTopic()) != 0) {
+            config.setMqttTopic(newTopic);
+            needsReboot = true;
+        }
+    }
 
     config.save();
 
@@ -144,36 +196,25 @@ void WebServer::handleConfigPost() {
 }
 
 void WebServer::handleSensorStatus() {
-    DynamicJsonDocument doc(512);
+    JsonDocument doc;
     
-    doc["sensorName"] = config.sensorName;  // Add the sensor name
+    doc["sensorName"] = config.getSensorName();
     
     if (WiFi.status() == WL_CONNECTED) {
         doc["connected"] = true;
         doc["ssid"] = WiFi.SSID();
         doc["ip"] = WiFi.localIP().toString();
         doc["isAPMode"] = false;
+        doc["mdnsHostname"] = mdnsManager.getHostname();
 
-        // Attempt to discover stairled-server.local
-        if (MDNS.begin("stairled-sensor")) {
-            int n = MDNS.queryService("http", "tcp");
-            bool serverFound = false;
-            for (int i = 0; i < n; ++i) {
-                if (MDNS.hostname(i) == "stairled-server") {
-                    doc["serverDiscovered"] = true;
-                    doc["serverIP"] = MDNS.IP(i).toString();
-                    doc["serverPort"] = MDNS.port(i);
-                    serverFound = true;
-                    break;
-                }
-            }
-            if (!serverFound) {
-                doc["serverDiscovered"] = false;
-            }
-            MDNS.end();
+        String serverIP;
+        uint16_t serverPort;
+        if (mdnsManager.discoverServer(serverIP, serverPort)) {
+            doc["serverDiscovered"] = true;
+            doc["serverIP"] = serverIP;
+            doc["serverPort"] = serverPort;
         } else {
             doc["serverDiscovered"] = false;
-            doc["mdnsError"] = "Failed to start mDNS";
         }
     } else if (wifiManager.isInAPMode()) {
         doc["connected"] = false;
@@ -187,7 +228,11 @@ void WebServer::handleSensorStatus() {
 
     String response;
     serializeJson(doc, response);
-    server.send(200, "application/json", response);
+    
+    Serial.println("Sensor status response:");
+    Serial.println(response);
+    
+    server.send(200, HTTP_APPLICATION_JSON, response);
 }
 
 void WebServer::handleRoot() {
@@ -237,8 +282,7 @@ void WebServer::handleWiFiConnect() {
         String ssid = server.arg("ssid");
         String password = server.arg("password");
         
-        strncpy(config.wifiSSID, ssid.c_str(), sizeof(config.wifiSSID) - 1);
-        strncpy(config.wifiPassword, password.c_str(), sizeof(config.wifiPassword) - 1);
+        config.setWifiCredentials(ssid.c_str(), password.c_str());
         config.save();
         
         // Send response before resetting
@@ -272,7 +316,7 @@ void WebServer::handleNotFound() {
 }
 
 bool WebServer::captivePortal() {
-    if (!isIp(server.hostHeader()) && server.hostHeader() != (String(config.sensorName) + ".local")) {
+    if (!isIp(server.hostHeader()) && server.hostHeader() != (String(config.getSensorName()) + ".local")) {
         Serial.println(F("Request redirected to captive portal"));
         server.sendHeader(HEADER_LOCATION, String(CAPTIVE_PORTAL_REDIRECT) + toStringIP(server.client().localIP()), true);
         server.send(302, HTTP_200_TEXT_PLAIN, "");
@@ -295,7 +339,7 @@ bool WebServer::isIp(const String& str) {
 void WebServer::handleMDNSClients() {
     if (WiFi.status() != WL_CONNECTED) {
         // Device is not connected to WiFi
-        DynamicJsonDocument errorDoc(256);
+        JsonDocument errorDoc;
         errorDoc["error"] = "Not connected to WiFi";
         errorDoc["isAPMode"] = wifiManager.isInAPMode();
         errorDoc["connected"] = false;
@@ -306,9 +350,12 @@ void WebServer::handleMDNSClients() {
         return;
     }
 
-    // Start mDNS to query services
-    if (!MDNS.begin(config.sensorName)) {
-        DynamicJsonDocument errorDoc(256);
+    // Create the proper mDNS name
+    String mdnsName = String(config.getSensorName()) + ".local";
+
+    // Start mDNS with the correct name
+    if (!MDNS.begin(mdnsName.c_str())) {
+        JsonDocument errorDoc;
         errorDoc["error"] = "Failed to start mDNS";
 
         String errorResponse;
@@ -318,11 +365,11 @@ void WebServer::handleMDNSClients() {
     }
 
     int n = MDNS.queryService("http", "tcp");  // Query HTTP services on the network
-    DynamicJsonDocument responseDoc(1024);
-    JsonArray clientsArray = responseDoc.createNestedArray("clients");
+    JsonDocument responseDoc;
+    JsonArray clientsArray = responseDoc["clients"].to<JsonArray>();
 
     for (int i = 0; i < n; ++i) {
-        JsonObject client = clientsArray.createNestedObject();
+        JsonObject client = clientsArray.add<JsonObject>();
         client["hostname"] = MDNS.hostname(i);
         client["ip"] = MDNS.IP(i).toString();
         client["port"] = MDNS.port(i);
