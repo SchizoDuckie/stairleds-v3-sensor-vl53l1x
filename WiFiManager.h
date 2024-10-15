@@ -2,7 +2,7 @@
 #define WIFI_MANAGER_H
 
 #include <ESP8266WiFi.h>
-#include <ESP8266mDNS.h>
+#include "MDNSManager.h"
 #include <vector>
 
 struct WiFiNetwork {
@@ -12,7 +12,7 @@ struct WiFiNetwork {
 
 class WiFiManager {
 public:
-  WiFiManager(Config& cfg);
+  WiFiManager(Config& cfg, MDNSManager& mdnsMgr);
   void setup();
   void handle();
   bool isConnected() const;
@@ -24,7 +24,8 @@ public:
   IPAddress getAPIP() const;
 
 private:
-  Config& config; // Reference to the Config object
+  Config& config;
+  MDNSManager& mdnsManager;
   std::vector<WiFiNetwork> networks;
   void scanNetworks();
   bool apMode;

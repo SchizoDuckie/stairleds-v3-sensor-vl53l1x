@@ -1,9 +1,10 @@
 #include "WiFiManager.h" 
 #include <ArduinoJson.h>
 
-WiFiManager::WiFiManager(Config& cfg) 
+WiFiManager::WiFiManager(Config& cfg, MDNSManager& mdnsMgr) 
   : apMode(false), 
     config(cfg),
+    mdnsManager(mdnsMgr),
     apIP(10, 0, 0, 1),
     apGateway(10, 0, 0, 1),
     apSubnet(255, 255, 255, 0) {}
@@ -12,39 +13,62 @@ void WiFiManager::setup() {
   WiFi.mode(WIFI_STA);
   String ssid = config.getWifiSSID();
   String password = config.getWifiPassword();
-  Serial.print(F("Attempting to connect to ap from config: "));
-  Serial.print(ssid);
-  Serial.print(F(" Password: "));
-  Serial.println(password);
-  if (!connect(ssid, password)) {
+
+  if (ssid.length() > 0) {
+    Serial.print(F("Attempting to connect to ap from config: "));
+    Serial.print(ssid);
+    Serial.print(F(" Password: "));
+    Serial.println(password);
+    if(!connect(ssid, password)) {
+      Serial.println(F("Starting AP fallback mode."));
+      startAPMode();
+    }
+  } else {
+    Serial.println(F("No configured wifi found, starting AP mode."));
     startAPMode();
   }
 }
 
 void WiFiManager::handle() {
-  if (apMode) {
-    MDNS.update();
-  } else if (WiFi.status() != WL_CONNECTED) {
+  if (WiFi.status() != WL_CONNECTED && !apMode) {
     Serial.println(F("WiFi connection lost. Attempting to reconnect..."));
     
-    if (!connect(config.getWifiSSID(), config.getWifiPassword())) {
+    String ssid = config.getWifiSSID();
+    String password = config.getWifiPassword();
+
+    if (ssid.length() > 0) {
+      if (!connect(ssid, password)) {
+        Serial.println(F("Reconnection failed. Starting AP mode."));
+        startAPMode();
+      }
+    } else {
+      Serial.println(F("No configured WiFi found. Starting AP mode."));
       startAPMode();
     }
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    mdnsManager.update();
   }
 }
 
 bool WiFiManager::isConnected() const {
   return WiFi.status() == WL_CONNECTED;
 }
+
 void WiFiManager::startAPMode() {
-    apMode = true;
+    if (apMode) {
+        Serial.println(F("Already in AP mode. Skipping AP start."));
+        return;
+    }
+    
     WiFi.mode(WIFI_AP);
     WiFi.softAPConfig(apIP, apGateway, apSubnet);
     
     // Use the sensor name in the AP name
     String apName = "stairled-sensor-";
-    if (strlen(config.sensorName) > 0) {
-        apName += config.sensorName;
+    if (strlen(config.getSensorName()) > 0) {
+        apName += config.getSensorName();
     } else {
         apName += String(ESP.getChipId(), HEX); // Fallback to chip ID if no name set
     }
@@ -60,7 +84,7 @@ void WiFiManager::startAPMode() {
     Serial.println(apName);
     Serial.print(F("AP IP address: "));
     Serial.println(WiFi.softAPIP());
-    
+    apMode = true;
     setupMDNS();
 }
 
@@ -74,36 +98,13 @@ void WiFiManager::stopAPMode() {
 }
 
 void WiFiManager::setupMDNS() {
-    // Create a unique mDNS name using the sensor name or chip ID
-    String mdnsName = "stairled-sensor-";
-    if (strlen(config.sensorName) > 0) {
-        mdnsName += config.sensorName;
-    } else {
-        mdnsName += String(ESP.getChipId(), HEX);
-    }
-    
-    // Ensure the mDNS name is not too long (max 63 characters)
-    if (mdnsName.length() > 63) {
-        mdnsName = mdnsName.substring(0, 63);
-    }
-    
-    // Replace any spaces with hyphens for a valid mDNS name
-    mdnsName.replace(" ", "-");
-    
-    if (MDNS.begin(mdnsName.c_str())) {
-        MDNS.addService("http", "tcp", 80);
-        Serial.print(F("mDNS responder started: http://"));
-        Serial.print(mdnsName);
-        Serial.println(F(".local"));
-    } else {
-        Serial.println(F("Error setting up mDNS responder!"));
-    }
+    mdnsManager.begin();
 }
 
 // Set a reasonable size for the JsonDocument to avoid dynamic memory allocation issues
 String WiFiManager::scanNetworksJson() {
-  const size_t capacity = JSON_ARRAY_SIZE(20) + JSON_OBJECT_SIZE(2) * 20; // Assuming a maximum of 20 networks
-  StaticJsonDocument<capacity> doc; // Using a StaticJsonDocument for better memory management
+  
+  JsonDocument doc;
   JsonArray jsonNetworks = doc.to<JsonArray>();
 
   scanNetworks(); // Make sure networks are populated before serialization
@@ -123,8 +124,9 @@ String WiFiManager::scanNetworksJson() {
 }
 
 bool WiFiManager::connect(const String& ssid, const String& password) {
+    
     if (ssid.length() == 0) {
-        Serial.println(F("WifiManager.connect was passed an empty ssid"));
+        Serial.println(F("WifiManager.connect was passed an empty ssid, aborting connect."));
         return false;
     }
 
@@ -140,7 +142,7 @@ bool WiFiManager::connect(const String& ssid, const String& password) {
     WiFi.begin(ssid.c_str(), password.c_str());
 
     int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+    while (WiFi.status() != WL_CONNECTED && attempts < 40) {
         delay(500);
         Serial.print(".");
         attempts++;
