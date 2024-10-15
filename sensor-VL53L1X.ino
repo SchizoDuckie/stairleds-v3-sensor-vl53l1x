@@ -4,19 +4,35 @@
 #include "OTAUpdater.h"
 #include "WebServer.h"
 #include "MQTTClient.h"
+#include "MDNSManager.h"
 
 Config config;
 Sensor sensorManager;
-WiFiManager wifiManager(config);
+MDNSManager mdnsManager(config);
+WiFiManager wifiManager(config, mdnsManager);
 OTAUpdater otaUpdater;
-WebServer webServer(config, otaUpdater, sensorManager, wifiManager);
+WebServer webServer(config, otaUpdater, sensorManager, wifiManager, mdnsManager);
 MQTTClient mqttClient(config);
 
 void setup() {
   Serial.begin(115200);
-  Serial.println(F("\nStairled Sensor Starting..."));
+  
   
   config.load();
+  Serial.print(F("\nStairled Sensor Starting..."));
+  Serial.print(F("\nSensor Name: "));
+  Serial.print(config.getSensorName());
+  Serial.print(F("\nMQTT Broker: "));
+  Serial.print(config.getMqttBroker());
+  Serial.print(F("\nMQTT Port: "));
+  Serial.print(config.getMqttPort());
+  Serial.print(F("\nMQTT Topic: "));
+  Serial.print(config.getMqttTopic());
+  Serial.print(F("\nWiFi SSID: "));
+  Serial.print(config.getWifiSSID());
+  Serial.print(F("\nWiFi Password: "));
+  Serial.print(config.getWifiPassword());
+ 
   sensorManager.setup();
   wifiManager.setup();
   otaUpdater.setup();
@@ -52,5 +68,5 @@ void loop() {
   
   
   // Implement watchdog timer reset
-  ESP.wdtFeed();
+  yield();
 }
