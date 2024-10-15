@@ -7,17 +7,27 @@ class Config {
 public:
   void load();
   void save();
+  const char* getSensorName() const;
+  void setSensorName(const char* name);
+  const char* getWifiSSID() const;
+  const char* getWifiPassword() const;
+  void setWifiCredentials(const char* ssid, const char* password);
+  const char* getMqttBroker() const;
+  void setMqttBroker(const char* broker);
+  uint16_t getMqttPort() const;
+  void setMqttPort(uint16_t port);
+  const char* getMqttTopic() const;
+  void setMqttTopic(const char* topic);
 
-  char sensorName[32];      // Assuming a max length of 31 chars for the name
-  char wifiSSID[32];        // Same for SSID
-  char wifiPassword[64];    // Passwords are generally longer
-  char mqttBroker[16];      // IP addresses or short domain names
-  int mqttPort;
-  char mqttTopic[64];       // Topics can be long
-
- // Getter methods for WiFi credentials
-    const char* getWifiSSID() const;       // Getter for WiFi SSID
-    const char* getWifiPassword() const;    // Getter for WiFi Password
+private:
+  struct ConfigData {
+    char sensorName[32];
+    char wifiSSID[33];
+    char wifiPassword[65];
+    char mqttBroker[64];
+    uint16_t mqttPort;
+    char mqttTopic[64];
+  } data;
 };
 
 extern Config config;
