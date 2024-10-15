@@ -39,9 +39,9 @@ bool Sensor::read() {
 
 String Sensor::getData() {
   if (distance < 0) {
-    return String(config.sensorName) + "|Error: No distance data available";
+    return String(config.getSensorName()) + "|Error: No distance data available";
   }
-  return String(config.sensorName) + "|Distance: " + String(distance);
+  return String(config.getSensorName()) + "|Distance: " + String(distance);
 }
 
 int Sensor::getDistance() const {
