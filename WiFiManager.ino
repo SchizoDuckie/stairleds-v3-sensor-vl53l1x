@@ -10,26 +10,15 @@ WiFiManager::WiFiManager(Config& cfg, MDNSManager& mdnsMgr)
     apSubnet(255, 255, 255, 0) {}
 
 void WiFiManager::setup() {
+  Serial.print(F("WifiManager::Setup"));
   WiFi.mode(WIFI_STA);
-  String ssid = config.getWifiSSID();
-  String password = config.getWifiPassword();
-
-  if (ssid.length() > 0) {
-    Serial.print(F("Attempting to connect to ap from config: "));
-    Serial.print(ssid);
-    Serial.print(F(" Password: "));
-    Serial.println(password);
-    if(!connect(ssid, password)) {
-      Serial.println(F("Starting AP fallback mode."));
-      startAPMode();
-    }
-  } else {
-    Serial.println(F("No configured wifi found, starting AP mode."));
-    startAPMode();
-  }
-}
+ }
 
 void WiFiManager::handle() {
+  // Check if we are in AP mode and periodically attempt to reconnect
+  static unsigned long lastReconnectAttempt = 0; // Track the last reconnect attempt time
+  const unsigned long reconnectInterval = 10000; // Attempt to reconnect every 10 seconds
+
   if (WiFi.status() != WL_CONNECTED && !apMode) {
     Serial.println(F("WiFi connection lost. Attempting to reconnect..."));
     
@@ -45,10 +34,18 @@ void WiFiManager::handle() {
       Serial.println(F("No configured WiFi found. Starting AP mode."));
       startAPMode();
     }
-  }
+  } else if (apMode) {
+    // If in AP mode, periodically attempt to reconnect
+    if (millis() - lastReconnectAttempt >= reconnectInterval) {
+      lastReconnectAttempt = millis(); // Update the last reconnect attempt time
+      String ssid = config.getWifiSSID();
+      String password = config.getWifiPassword();
 
-  if (WiFi.status() == WL_CONNECTED) {
-    mdnsManager.update();
+      if (ssid.length() > 0) {
+        Serial.println(F("Attempting to reconnect to original AP..."));
+        connect(ssid, password); // Attempt to reconnect
+      }
+    }
   }
 }
 
@@ -57,9 +54,11 @@ bool WiFiManager::isConnected() const {
 }
 
 void WiFiManager::startAPMode() {
-    if (apMode) {
-        Serial.println(F("Already in AP mode. Skipping AP start."));
-        return;
+  Serial.println(F("WifiManager::startAPMode."));
+  if (apMode)
+  {
+    Serial.println(F("Already in AP mode. Skipping AP start."));
+    return;
     }
     
     WiFi.mode(WIFI_AP);
@@ -89,6 +88,7 @@ void WiFiManager::startAPMode() {
 }
 
 void WiFiManager::stopAPMode() {
+  Serial.println(F("WifiManager::stopAPMode."));
   if (apMode) {
     apMode = false;
     WiFi.softAPdisconnect(true);
@@ -98,12 +98,13 @@ void WiFiManager::stopAPMode() {
 }
 
 void WiFiManager::setupMDNS() {
-    mdnsManager.begin();
+  Serial.println(F("WifiManager::setupMDNS."));
+  mdnsManager.begin();
 }
 
 // Set a reasonable size for the JsonDocument to avoid dynamic memory allocation issues
 String WiFiManager::scanNetworksJson() {
-  
+  Serial.println(F("Scanning for nearby networks to serialize to json"));
   JsonDocument doc;
   JsonArray jsonNetworks = doc.to<JsonArray>();
 
@@ -124,41 +125,64 @@ String WiFiManager::scanNetworksJson() {
 }
 
 bool WiFiManager::connect(const String& ssid, const String& password) {
+  Serial.println(F("Wifimanager::connect"));
+
+  if (ssid.length() == 0) {
+    Serial.println(F("WifiManager.connect was passed an empty ssid, aborting connect."));
+    return false;
+  }
+
+  if (apMode) {
+    Serial.println(F("Stopping AP mode"));
+    stopAPMode();
+  }
+
+  Serial.print(F("Attempting to connect to: "));
+  Serial.println(ssid);
+  Serial.print(F("Password: "));
+  Serial.println(password);
+  WiFi.begin(ssid.c_str(), password.c_str());
+
+  int attempts = 0;
+  unsigned long startAttemptTime = millis(); // Start time for connection attempt
+  const unsigned long timeout = 30000; // 30 seconds timeout
+  const unsigned long backoffInterval = 2000; // 5 seconds backoff
+
+  while (WiFi.status() != WL_CONNECTED && attempts < 40) {
+    delay(200);
+    Serial.print(".");
+    attempts++;
+
+    // Check if the timeout has been reached
+    if (millis() - startAttemptTime >= timeout) {
+      Serial.println(F("\nConnection attempt timed out. Starting AP mode."));
+      startAPMode(); // Start AP mode if timeout occurs
+      return false;
+    }
+
+    // Implement backoff strategy
+    if (attempts > 5) {
+      Serial.print(F("\nWifi not connected within "));
+      Serial.print(attempts);
+      Serial.println(F("attempts. Waiting 2s before next attempt..."));
+      delay(backoffInterval);
+    }
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println(F("\nConnected to WiFi"));
     
-    if (ssid.length() == 0) {
-        Serial.println(F("WifiManager.connect was passed an empty ssid, aborting connect."));
-        return false;
-    }
-
-    if (apMode) {
-        Serial.println(F("Stopping AP mode"));
-        stopAPMode();
-    }
-
-    Serial.print(F("Attempting to connect to: "));
-    Serial.println(ssid);
-    Serial.print(F("Password: "));
-    Serial.println(password);
-    WiFi.begin(ssid.c_str(), password.c_str());
-
-    int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 40) {
-        delay(500);
-        Serial.print(".");
-        attempts++;
-    }
-
-    if (WiFi.status() == WL_CONNECTED) {
-        Serial.println(F("\nConnected to WiFi"));
-        setupMDNS();  // Set up mDNS after successful connection
-        return true;
-    } else {
-        Serial.println(F("\nFailed to connect to WiFi"));
-        return false;
-    }
+    Serial.println(F("Starting MDNS because WiFi is connected"));
+    setupMDNS();  // Set up mDNS after successful connection
+    return true;
+  } else {
+    Serial.println(F("\nFailed to connect to WiFi"));
+    return false;
+  }
 }
 
 void WiFiManager::scanNetworks() {
+  Serial.print(F("WiFiManager::scanNetworks"));
   networks.clear();
   int n = WiFi.scanNetworks();
   for (int i = 0; i < n; ++i) {
