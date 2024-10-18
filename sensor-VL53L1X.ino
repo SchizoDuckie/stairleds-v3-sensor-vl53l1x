@@ -15,6 +15,7 @@ WebServer webServer(config, otaUpdater, sensorManager, wifiManager, mdnsManager)
 MQTTClient mqttClient(config);
 
 void setup() {
+  delay(1000);
   Serial.begin(115200);
   
   
@@ -33,18 +34,21 @@ void setup() {
   Serial.print(F("\nWiFi Password: "));
   Serial.print(config.getWifiPassword());
  
-  sensorManager.setup();
+  
   wifiManager.setup();
   otaUpdater.setup();
   webServer.begin();
-  //mqttClient.setup();
+  sensorManager.setup();
+  
+  mqttClient.setup();
 }
 
 void loop() {
   wifiManager.handle();
   webServer.handle();
   otaUpdater.handle();
-  //mqttClient.handle();
+  mdnsManager.handle();
+  mqttClient.handle();
 
   static unsigned long lastSensorRead = 0;
   unsigned long currentMillis = millis();
@@ -56,11 +60,9 @@ void loop() {
       //Serial.printf("Free heap: %d bytes\n", ESP.getFreeHeap());
 
       if (wifiManager.isConnected() && mqttClient.isConnected()) {
-        static unsigned long lastMqttPublish = 0;
-        if (currentMillis - lastMqttPublish >= 5000) { // Publish to MQTT every 5 seconds
-          //mqttClient.publish(sensorManager.getData());
-          lastMqttPublish = currentMillis;
-        }
+          Serial.print("Spewing sensor log onto mqtt: ");
+          Serial.println(sensorManager.getData());
+          mqttClient.publish(sensorManager.getData());
       }
     }
   }
