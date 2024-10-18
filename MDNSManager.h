@@ -4,20 +4,21 @@
 #include <ESP8266mDNS.h>
 #include "Config.h"
 
+
 class MDNSManager {
 public:
     MDNSManager(Config& config);
     bool begin();
-    void update();
+    void handle();
     void end();
     String getHostname() const;
+    static bool mDNSStarted;
     bool discoverServer(String& serverIP, uint16_t& serverPort);
-    static String sanitizeName(const String& name);
 
 private:
     Config& config;
     String hostname;
-    void createHostname();
+    void createHostname(const char *sensorName);
 };
 
 #endif // MDNS_MANAGER_H

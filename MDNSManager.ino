@@ -1,28 +1,43 @@
 #include "MDNSManager.h"
 
 MDNSManager::MDNSManager(Config& config) : config(config) {
-    createHostname();
-}
+    }
+
+bool MDNSManager::mDNSStarted = false;
 
 bool MDNSManager::begin() {
-    if (MDNS.begin(hostname.c_str())) {
-        MDNS.addService("http", "tcp", 80);
-        Serial.print(F("mDNS responder started: http://"));
-        Serial.print(hostname);
-        Serial.println(F(".local"));
-        return true;
+    if (!mDNSStarted) {
+        createHostname(config.getSensorName());
+        if (MDNS.begin(hostname.c_str())) {
+            MDNS.addService("http", "tcp", 80);
+            MDNS.addServiceTxt("http", "tcp", "path", "/");
+            MDNS.addServiceTxt("http", "tcp", "version", "1.0");
+            Serial.print(F("mDNS responder started: http://"));
+            Serial.print(getHostname());
+            mDNSStarted = true;
+            return true;
+        } else {
+            Serial.println(F("Failed to start mDNS responder!"));
+            return false;
+        }
     } else {
-        Serial.println(F("Error setting up mDNS responder!"));
-        return false;
+        Serial.println(F("mDNS responder already started."));
+        return true;
     }
 }
 
-void MDNSManager::update() {
-    MDNS.update();
+unsigned long lastAnnouncementTime = 0; // New member variable
+
+void MDNSManager::handle() {
+    if (mDNSStarted)
+    {
+        MDNS.update();
+    }
 }
 
 void MDNSManager::end() {
     MDNS.end();
+    mDNSStarted = false;
 }
 
 String MDNSManager::getHostname() const {
@@ -32,7 +47,7 @@ String MDNSManager::getHostname() const {
 bool MDNSManager::discoverServer(String& serverIP, uint16_t& serverPort) {
     int n = MDNS.queryService("http", "tcp");
     for (int i = 0; i < n; ++i) {
-        if (MDNS.hostname(i) == "stairled-server") {
+        if (MDNS.hostname(i) == "stairled-server.local") {
             serverIP = MDNS.IP(i).toString();
             serverPort = MDNS.port(i);
             return true;
@@ -41,10 +56,11 @@ bool MDNSManager::discoverServer(String& serverIP, uint16_t& serverPort) {
     return false;
 }
 
-void MDNSManager::createHostname() {
+void MDNSManager::createHostname(const char *sensorName)
+{
     hostname = "stairled-sensor-";
-    if (strlen(config.getSensorName()) > 0) {
-        hostname += sanitizeName(config.getSensorName());
+    if (strlen(sensorName) > 0) {
+        hostname += sensorName; 
     } else {
         hostname += String(ESP.getChipId(), HEX);
     }
@@ -54,18 +70,5 @@ void MDNSManager::createHostname() {
     }
 }
 
-String MDNSManager::sanitizeName(const String& name) {
-    String sanitized = name;
-    sanitized.toLowerCase();
-    sanitized.replace(" ", "-");
-    
-    // Remove any character that's not a-z, 0-9, or -
-    for (int i = sanitized.length() - 1; i >= 0; i--) {
-        char c = sanitized.charAt(i);
-        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-')) {
-            sanitized.remove(i, 1);
-        }
-    }
-    
-    return sanitized;
-}
+
+
