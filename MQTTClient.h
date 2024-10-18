@@ -15,11 +15,13 @@ public:
   bool publish(const String& message);
 
 private:
+
   Config& config;
   WiFiClient espClient;
   PubSubClient client;
   unsigned long lastReconnectAttempt = 0;
   const unsigned long RECONNECT_INTERVAL = 5000; // 5 seconds between reconnect attempts
+  String mqttTopic;                              // Store the full MQTT topic
 };
 
 #endif
