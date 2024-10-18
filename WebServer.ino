@@ -33,8 +33,7 @@ void WebServer::begin() {
     }
 
     setupRoutes();
-    server.begin();
-    Serial.println(F("WebServer started"));
+    serverStarted = false; // Initialize serverStarted to false
 }
 
 void WebServer::setupRoutes() {
@@ -86,6 +85,17 @@ void WebServer::logRequest() {
 
 
 void WebServer::handle() {
+    // Check if WiFi is connected before starting the server
+    if (wifiManager.isConnected()) {
+        if (!serverStarted)
+        { // Check if the server has already started
+            server.begin();
+            serverStarted = true; // Set serverStarted to true
+            Serial.println(F("WebServer started"));
+        }
+    } else {
+        Serial.println(F("WiFi not connected, WebServer not started"));
+    }
     server.handleClient();
 }
 
@@ -137,7 +147,7 @@ void WebServer::handleConfigPost() {
     
     bool needsReboot = false;
 
-    if (doc.containsKey("sensorName")) {
+    if (doc["sensorName"].is<const char*>()) { // Check if "sensorName" exists
         String newName = doc["sensorName"].as<String>();
         if (strcmp(newName.c_str(), config.getSensorName()) != 0) {
             config.setSensorName(newName.c_str());
@@ -145,7 +155,7 @@ void WebServer::handleConfigPost() {
         }
     }
 
-    if (doc.containsKey("wifiSSID") && doc.containsKey("wifiPassword")) {
+    if (doc["wifiSSID"].is<const char*>() && doc["wifiPassword"].is<const char*>()) { // Check if both "wifiSSID" and "wifiPassword" exist
         const char* newSSID = doc["wifiSSID"];
         const char* newPassword = doc["wifiPassword"];
         if (strcmp(newSSID, config.getWifiSSID()) != 0 || 
@@ -155,7 +165,7 @@ void WebServer::handleConfigPost() {
         }
     }
 
-    if (doc.containsKey("mqttBroker")) {
+    if (doc["mqttBroker"].is<const char*>()) { // Check if "mqttBroker" exists
         const char* newBroker = doc["mqttBroker"];
         if (strcmp(newBroker, config.getMqttBroker()) != 0) {
             config.setMqttBroker(newBroker);
@@ -163,7 +173,7 @@ void WebServer::handleConfigPost() {
         }
     }
 
-    if (doc.containsKey("mqttPort")) {
+    if (doc["mqttPort"].is<uint16_t>()) { // Check if "mqttPort" exists
         uint16_t newPort = doc["mqttPort"];
         if (newPort != config.getMqttPort()) {
             config.setMqttPort(newPort);
@@ -171,7 +181,7 @@ void WebServer::handleConfigPost() {
         }
     }
 
-    if (doc.containsKey("mqttTopic")) {
+    if (doc["mqttTopic"].is<const char*>()) { // Check if "mqttTopic" exists
         const char* newTopic = doc["mqttTopic"];
         if (strcmp(newTopic, config.getMqttTopic()) != 0) {
             config.setMqttTopic(newTopic);
@@ -386,4 +396,9 @@ void WebServer::handleMDNSClients() {
 
 String WebServer::toStringIP(const IPAddress& ip) {
     return String(ip[0]) + "." + String(ip[1]) + "." + String(ip[2]) + "." + String(ip[3]);
+}
+
+// Add the hasStarted function
+bool WebServer::hasStarted() const {
+    return serverStarted; // Return the current status of the server
 }

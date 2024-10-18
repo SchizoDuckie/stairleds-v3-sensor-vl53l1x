@@ -14,6 +14,7 @@ public:
     WebServer(Config& config, OTAUpdater& otaUpdater, Sensor& sensor, WiFiManager& wifiManager, MDNSManager& mdnsManager);
     void begin();
     void handle();
+    bool hasStarted() const; // Declaration of the hasStarted function
 
 private:
     ESP8266WebServer server;
@@ -22,6 +23,7 @@ private:
     Sensor& sensor;
     WiFiManager& wifiManager;
     MDNSManager& mdnsManager;
+    bool serverStarted = false; // Track if the server has started
 
     void setupRoutes();
     void handleRoot();
