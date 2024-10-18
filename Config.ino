@@ -23,7 +23,7 @@ void Config::load() {
     data.wifiPassword[0] = '\0';
     strlcpy(data.mqttBroker, "10.0.0.1", sizeof(data.mqttBroker));
     data.mqttPort = 1883;
-    strlcpy(data.mqttTopic, "stairled/sensor1", sizeof(data.mqttTopic));
+    strlcpy(data.mqttTopic, "stairled/", sizeof(data.mqttTopic));
   }
   EEPROM.end();
 }
@@ -81,6 +81,7 @@ const char* Config::getMqttTopic() const {
 }
 
 void Config::setMqttTopic(const char* topic) {
+  
   strlcpy(data.mqttTopic, topic, sizeof(data.mqttTopic));
 }
 
